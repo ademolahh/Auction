@@ -114,7 +114,7 @@ contract EnglishAuction {
         delete bid;
         if (bidWinner != address(0) && msg.sender == bidWinner) {
             (bool success, ) = seller.call{value: _highestBid}("");
-            if (!success) revert YouCanNotWithdraw();
+            if (!success) {
             token.safeTransferFrom(
                 address(this),
                 bidWinner,
@@ -122,6 +122,7 @@ contract EnglishAuction {
                 amount,
                 ""
             );
+            }
         } else if (msg.sender == seller && bidWinner == address(0)) {
             token.safeTransferFrom(address(this), seller, tokenId, amount, "");
         } else {
