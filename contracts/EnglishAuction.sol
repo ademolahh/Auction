@@ -2,6 +2,7 @@
 pragma solidity ^0.8.9;
 
 import "hardhat/console.sol";
+import {Lib} from "./library/Lib.sol";
 
 interface IERC1155 {
     function safeTransferFrom(
@@ -28,12 +29,13 @@ error YouAreNotAllowedToClaim();
 error YouAreNotAllowedToWithdraw();
 
 contract EnglishAuction {
+    using Lib for address[];
     IERC1155 public immutable token;
-    address private immutable seller;
-    uint256 private immutable tokenId;
-    uint256 private immutable amount;
-    uint256 private constant MINIMUM_BID = 5 * 10**16;
-    uint256 private constant DURATION = 60 * 60 * 24;
+    address public immutable seller;
+    uint256 public immutable tokenId;
+    uint256 public immutable amount;
+    uint256 public constant MINIMUM_BID = 5 * 10**16;
+    uint256 public constant DURATION = 60 * 60 * 24;
 
     struct Bid {
         address highestBidder;
@@ -43,7 +45,9 @@ contract EnglishAuction {
     }
     Bid bid;
 
-    mapping(address => uint256) private bids;
+    address[] bidders;
+
+    mapping(address => uint256) public bids;
 
     modifier BidEnd() {
         if (block.timestamp < bid.endTime) revert BidIsStillActive();
@@ -74,12 +78,8 @@ contract EnglishAuction {
         uint256 _startTime = block.timestamp;
         if (msg.sender != seller) revert NotTheSeller();
         token.safeTransferFrom(msg.sender, address(this), tokenId, amount, "");
-        bid = Bid(
-            address(0),
-            uint48(block.timestamp),
-            uint48(_startTime + DURATION),
-            0
-        );
+        bid.startTime = uint48(block.timestamp);
+        bid.endTime = uint48(_startTime + DURATION);
         console.log("The start bid time is", block.timestamp);
         console.log("The bid will end at", bid.endTime);
         emit BidStarted(_startTime);
@@ -97,11 +97,23 @@ contract EnglishAuction {
         emit BidPlaced(msg.sender, bid.highestBid);
     }
 
-    function withdraw() public BidEnd {
+    function updateBids(address _addr) internal {
         address _highestBidder = bid.highestBidder;
+        uint256 position = bidders._removeElement(_addr);
+        if (msg.sender == _highestBidder) {
+            if (position > 0) {
+                bid.highestBidder = bidders[position - 1];
+            } else {
+                bid.highestBidder = address(0);
+            }
+            bid.highestBid = bids[bid.highestBidder];
+        }
+    }
+
+    function withdraw() public {
         uint256 bal = bids[msg.sender];
         if (bal == 0) revert ZeroBalance();
-        if (msg.sender == _highestBidder) revert YouAreNotAllowedToWithdraw();
+        updateBids(msg.sender);
         bids[msg.sender] = 0;
         (bool success, ) = payable(msg.sender).call{value: bal}("");
         if (!success) revert YouCanNotWithdraw();
@@ -112,23 +124,26 @@ contract EnglishAuction {
         address bidWinner = bid.highestBidder;
         uint256 _highestBid = bid.highestBid;
         delete bid;
-        if (bidWinner != address(0) && msg.sender == bidWinner) {
+        if (bidWinner != address(0)) {
             (bool success, ) = seller.call{value: _highestBid}("");
-            if (!success) {
-            token.safeTransferFrom(
-                address(this),
-                bidWinner,
-                tokenId,
-                amount,
-                ""
-            );
+            if (success) {
+                token.safeTransferFrom(
+                    address(this),
+                    bidWinner,
+                    tokenId,
+                    amount,
+                    ""
+                );
             }
-        } else if (msg.sender == seller && bidWinner == address(0)) {
-            token.safeTransferFrom(address(this), seller, tokenId, amount, "");
+            emit BidEnded(bidWinner);
         } else {
-            revert YouAreNotAllowedToClaim();
+            token.safeTransferFrom(address(this), seller, tokenId, amount, "");
         }
-        emit BidEnded(bidWinner);
+        console.log("The winner is ", bidWinner);
+    }
+
+    function getBidders() external view returns (address[] memory) {
+        return bidders;
     }
 
     function onERC1155Received(
