@@ -2,7 +2,6 @@
 pragma solidity ^0.8.9;
 
 import "hardhat/console.sol";
-import {Lib} from "./library/Lib.sol";
 
 interface IERC1155 {
     function safeTransferFrom(
@@ -28,8 +27,7 @@ error LowerThanTheHighestBid();
 error YouAreNotAllowedToClaim();
 error YouAreNotAllowedToWithdraw();
 
-contract EnglishAuction {
-    using Lib for address[];
+contract Auction {
     IERC1155 public immutable token;
     address public immutable seller;
     uint256 public immutable tokenId;
@@ -44,8 +42,6 @@ contract EnglishAuction {
         uint256 highestBid;
     }
     Bid bid;
-
-    address[] bidders;
 
     mapping(address => uint256) public bids;
 
@@ -97,23 +93,11 @@ contract EnglishAuction {
         emit BidPlaced(msg.sender, bid.highestBid);
     }
 
-    function updateBids(address _addr) internal {
-        address _highestBidder = bid.highestBidder;
-        uint256 position = bidders._removeElement(_addr);
-        if (msg.sender == _highestBidder) {
-            if (position > 0) {
-                bid.highestBidder = bidders[position - 1];
-            } else {
-                bid.highestBidder = address(0);
-            }
-            bid.highestBid = bids[bid.highestBidder];
-        }
-    }
-
-    function withdraw() public {
+    function withdraw() public BidEnd {
         uint256 bal = bids[msg.sender];
+        address bidWinner = bid.highestBidder;
         if (bal == 0) revert ZeroBalance();
-        updateBids(msg.sender);
+        if (bidWinner == msg.sender) revert YouAreNotAllowedToWithdraw();
         bids[msg.sender] = 0;
         (bool success, ) = payable(msg.sender).call{value: bal}("");
         if (!success) revert YouCanNotWithdraw();
@@ -125,6 +109,7 @@ contract EnglishAuction {
         uint256 _highestBid = bid.highestBid;
         delete bid;
         if (bidWinner != address(0)) {
+            bids[bidWinner] = 0;
             (bool success, ) = seller.call{value: _highestBid}("");
             if (success) {
                 token.safeTransferFrom(
@@ -140,10 +125,6 @@ contract EnglishAuction {
             token.safeTransferFrom(address(this), seller, tokenId, amount, "");
         }
         console.log("The winner is ", bidWinner);
-    }
-
-    function getBidders() external view returns (address[] memory) {
-        return bidders;
     }
 
     function onERC1155Received(
