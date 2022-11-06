@@ -1,16 +1,9 @@
 {
   "name": "auction",
   "version": "1.0.0",
-  "description": "a decentralized autonomous organization",
+  "description": "",
   "scripts": {
-    "compile": "hardhat compile",
-    "test": "hardhat test test/unit/*_test.js --network hardhat",
-    "test-staging": "hardhat test test/staging/*_test.js --network rinkeby",
-    "lint": "solhint 'contracts/*.sol'",
-    "lint:fix": "solhint 'contracts/**/*.sol' --fix",
-    "format": "prettier --write .",
-    "coverage": "hardhat coverage --solcoverjs ./.solcover.js",
-    "fuzzing": "docker run -it --rm -v $PWD:/src trailofbits/eth-security-toolbox"
+    "compile": "hardhat compile"
   },
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "npm:hardhat-deploy-ethers@^0.3.0-beta.13",
